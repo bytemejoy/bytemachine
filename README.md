@@ -15,5 +15,6 @@ Source code for the bytemachine from bytemejoy
 ### Controller
 * [Raspberry Pi 5](https://www.raspberrypi.com/products/raspberry-pi-5/)
 * [Adafruit I2C Quad Rotary Encoder](https://www.adafruit.com/product/5752)
-* [Adafruit Rotary Encoder + Extras x 4](https://www.adafruit.com/product/377)
+* [Adafruit Rotary Encoder + Extras x4](https://www.adafruit.com/product/377)
+* [Adafruit Clear Micro Potentiometer Knob x4](https://www.adafruit.com/product/5676)
 * [SparkFun Qwiic or Stemma QT SHIM for Raspberry Pi](https://www.adafruit.com/product/4463)
