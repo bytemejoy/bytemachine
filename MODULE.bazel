@@ -1,14 +1,15 @@
-# Latest release can be found here:
-# https://github.com/bazelbuild/rules_python/releases.
+bazel_dep(name = "rules_uv", version = "0.14.0", dev_dependency = True)
 bazel_dep(name = "rules_python", version = "0.33.2")
+bazel_dep(name = "aspect_rules_py", version = "0.7.3", dev_dependency = True) 
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(python_version = "3.12", is_default = True)
+python.toolchain(python_version = "3.12")
+use_repo(python, "python_3_12")
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
-    hub_name = "bytemachine_deps",
+    hub_name = "pypi",
     python_version = "3.12",
-    requirements_lock = "//third_party:requirements.txt",
+    requirements_lock = "//:requirements.txt",
 )
-use_repo(pip, "bytemachine_deps")
+use_repo(pip, "pypi")

@@ -1,11 +1,10 @@
-load("@rules_python//python:defs.bzl", "py_binary")
-load("@rules_python//python:defs.bzl", "py_library")
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
 
 py_binary(
-    name = "controller_main",
-    srcs = ["controller_main.py"],
+    name = "main",
+    srcs = ["main.py"],
     deps = [
-	"@bytemachine_deps//pymodbus",
-	"@bytemachine_deps//pyserial",
+        "@pypi//pymodbus",
+	"//src/orca:constants",
     ],
 )

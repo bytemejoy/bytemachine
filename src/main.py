@@ -4,6 +4,7 @@ import time
 
 from pymodbus import Framer
 from pymodbus.client import AsyncModbusSerialClient
+from src.orca.constants import Constants
 
 LOOP_COUNT = 1000
 REGISTER_COUNT = 10
@@ -36,5 +37,6 @@ async def run_async_client_test():
 
 
 if __name__ == "__main__":
-    run_sync_client_test()
+    print(Constants.Modbus.READ)
+    run_async_client_test()
     asyncio.run(run_async_client_test())
