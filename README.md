@@ -1,7 +1,50 @@
 # bytemachine
 Source code for the bytemachine from bytemejoy
 
-## Hardware
+## Development instructions (how to contribute)
+
+### Build System
+
+This project uses the [bazel build system](https://bazel.build/).
+
+To install/use bazel, I **highly** recommend using [bazelisk](https://github.com/bazelbuild/bazelisk) which greatly
+simplifies bazel setup, will keep your bazel version up to date, and has
+excellent cross-platform support.
+
+Both `requirements.txt` generation and `venv` generation are handled by
+[rules_uv](https://github.com/theoremlp/rules_uv).
+
+Aspect Build's `rules_py` is used for the `py_*` rules which has a few very 
+nice benefits:
+* No system interpreter dependency
+* `$PYTHONPATH` and `sys.path` are never touched
+* Python is run in isolated mode which prevents escaping Bazel's sandbox
+* First-class `virtualenv` support
+
+### Development Setup
+
+The following assumes that you have aliased the `bazelisk` command to `bazel`.
+
+To update `requirements.txt`:
+* `bazel run @@//:generate_requirements_txt`
+
+To generate the development `venv` for use in an IDE (whichever one your heart
+desires):
+* `bazel run @@//:create_venv`
+
+### Project Overview
+
+The main entrypoint for this project is `//src:main` which starts up the motor
+controller.
+
+Motor mode, movement, speed, etc. is controlled either via the command line or
+using the rotary encoders which have pre-defined function mappings.
+
+Communication with the `orca` motor uses `modbus` which leans almost entirely
+on `pymodbus`.
+
+
+## Hardware Bill of Materials (so far)
 
 ### Motor
 * [ORCA-6-LITE](https://irisdynamics.com/products/orca-series)
