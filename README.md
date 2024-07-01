@@ -26,11 +26,11 @@ nice benefits:
 The following assumes that you have aliased the `bazelisk` command to `bazel`.
 
 To update `requirements.txt`:
-* `bazel run @@//:generate_requirements_txt`
+* `bazel run //:generate_requirements_txt`
 
 To generate the development `venv` for use in an IDE (whichever one your heart
 desires):
-* `bazel run @@//:create_venv`
+* `bazel run //:create_venv`
 
 ### Project Overview
 
