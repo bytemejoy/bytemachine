@@ -1,52 +1,80 @@
-from pymodbus.constants import Endian
-from pymodbus.payload import BinaryPayloadDecoder
+import struct
+
+from pymodbus.pdu import ModbusRequest, ModbusResponse
 
 
-def motor_write_stream(client, slave_address, register_address, register_width, data):
-    """
-    Writes a value to a register in the Orca actuator using the motor write stream function.
+class MotorWriteStreamRequest(ModbusRequest):
+    function_code = 105
+    _rtu_frame_size = 10  # 2 byte address + 1 byte width + 4 byte data
 
-    Args:
-        client: The Modbus client object.
-        slave_address (int): The Modbus slave address of the actuator.
-        register_address (int): The address of the register to write to.
-        register_width (int): The width of the register (1 for single, 2 for double).
-        data (int): The data to write to the register.
+    def __init__(self, register_address, register_width, data, **kwargs):
+        super().__init__(**kwargs)
+        self.register_address = register_address
+        self.register_width = register_width
+        self.data = data
 
-    Returns:
-        tuple: A tuple containing the shaft position, realized force, power consumption,
-               temperature, voltage, errors, or None if the operation failed.
-    """
-    if register_width == 1:
-        data = [0, 0, data]  # Pad with zeros if single-width register
-    else:
-        data = [data]
+    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Encode request."""
+        if self.register_width == 1:
+            return struct.pack(
+                ">HBH", self.register_address, self.register_width, self.data
+            )
+        else:
+            return struct.pack(
+                ">HBl", self.register_address, self.register_width, self.data
+            )
 
-    request = client.write_registers(
-        1,
-        [register_address, register_width] + data,
-        unit=slave_address,
-        function_code=105,  # Custom function code 105 (0x69)
-    )
-    if request.isError():
-        print(f"Error sending motor write stream: {request}")
-        return None
+    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Decode request."""
+        if self.register_width == 1:
+            self.register_address, self.register_width, self.data = struct.unpack(
+                ">HBH", data
+            )
+        else:
+            self.register_address, self.register_width, self.data = struct.unpack(
+                ">HBl", data
+            )
 
-    response = client.read_holding_registers(
-        1, 6, unit=slave_address, function_code=105
-    )
-    if response.isError():
-        print(f"Error reading motor write stream response: {response}")
-        return None
+    def execute(self, context):
+        """Execute request."""
+        values = context.getValues(self.function_code, 0, 6)
+        return MotorWriteStreamResponse(values)
 
-    decoder = BinaryPayloadDecoder.fromRegisters(
-        response.registers, byteorder=Endian.BIG
-    )
-    position = decoder.decode_32bit_int()
-    force = decoder.decode_32bit_int()
-    power = decoder.decode_16bit_int()
-    temperature = decoder.decode_8bit_int()
-    voltage = decoder.decode_16bit_uint()
-    errors = decoder.decode_16bit_uint()
 
-    return position, force, power, temperature, voltage, errors
+class MotorWriteStreamResponse(ModbusResponse):
+    function_code = 105
+    _rtu_byte_count_pos = 2
+
+    def __init__(self, values=None, **kwargs):
+        """Initialize response."""
+        ModbusResponse.__init__(self, **kwargs)
+        self.values = values or []
+        self.position = None
+        self.force = None
+        self.power = None
+        self.temperature = None
+        self.voltage = None
+        self.errors = None
+
+    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Encode response."""
+        return struct.pack(
+            ">llhBHH",
+            self.position,
+            self.force,
+            self.power,
+            self.temperature,
+            self.voltage,
+            self.errors,
+        )
+
+    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Decode response."""
+        (
+            self.position,
+            self.force,
+            self.power,
+            self.temperature,
+            self.voltage,
+            self.errors,
+        ) = struct.unpack(">llhBHH", data)

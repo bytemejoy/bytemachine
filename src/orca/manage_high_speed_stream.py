@@ -1,42 +1,53 @@
-from pymodbus.constants import Endian
-from pymodbus.payload import BinaryPayloadDecoder
+import struct
+
+from pymodbus.pdu import ModbusRequest, ModbusResponse
 
 
-def manage_high_speed_stream(client, slave_address, enable, baud_rate, delay_us):
-    """
-    Manages the high-speed stream parameters of the Orca actuator.
+class ManageHighSpeedStreamRequest(ModbusRequest):
+    function_code = 65
+    _rtu_frame_size = 12
 
-    Args:
-        client: The Modbus client object.
-        slave_address (int): The Modbus slave address of the actuator.
-        enable (bool): True to enable the high-speed stream, False to disable.
-        baud_rate (int): The target baud rate for the high-speed stream (bps).
-        delay_us (int): The target response delay for the high-speed stream (microseconds).
+    def __init__(self, enable, baud_rate, delay_us, **kwargs):
+        super().__init__(**kwargs)
+        self.enable = enable
+        self.baud_rate = baud_rate
+        self.delay_us = delay_us
 
-    Returns:
-        tuple: A tuple containing the realized baud rate and delay, or None if the operation failed.
-    """
-    sub_function_code = 0xFF00 if enable else 0x0000
-    request = client.write_registers(
-        1,
-        [sub_function_code, baud_rate, delay_us],
-        unit=slave_address,
-        function_code=65,  # Custom function code 65 (0x41)
-    )
+    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Encode request."""
+        sub_function_code = 0xFF00 if self.enable else 0x0000
+        return struct.pack(
+            ">HHlH", sub_function_code, self.baud_rate, self.delay_us, 0
+        )  # Padding with 0
 
-    if request.isError():
-        print(f"Error managing high-speed stream: {request}")
-        return None
+    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Decode request."""
+        self.sub_function_code, self.baud_rate, self.delay_us, _ = struct.unpack(
+            ">HHlH", data
+        )
+        self.enable = self.sub_function_code == 0xFF00
 
-    response = client.read_holding_registers(1, 3, unit=slave_address, function_code=65)
-    if response.isError():
-        print(f"Error reading high-speed stream response: {response}")
-        return None
+    def execute(self, context):
+        """Execute request."""
+        values = context.getValues(self.function_code, 0, 3)
+        return ManageHighSpeedStreamResponse(values)
 
-    decoder = BinaryPayloadDecoder.fromRegisters(
-        response.registers, byteorder=Endian.BIG
-    )
-    realized_baud_rate = decoder.decode_32bit_int()
-    realized_delay_us = decoder.decode_16bit_uint()
 
-    return realized_baud_rate, realized_delay_us
+class ManageHighSpeedStreamResponse(ModbusResponse):
+    function_code = 65
+    _rtu_byte_count_pos = 2
+
+    def __init__(self, values=None, **kwargs):
+        """Initialize response."""
+        ModbusResponse.__init__(self, **kwargs)
+        self.values = values or []
+        self.baud_rate = None
+        self.delay_us = None
+
+    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Encode response."""
+        return struct.pack(">HH", self.baud_rate, self.delay_us)
+
+    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Decode response."""
+        self.baud_rate, self.delay_us = struct.unpack(">HH", data)
