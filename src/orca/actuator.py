@@ -139,7 +139,11 @@ class OrcaActuator:
         if response.isError():
             print(f"Error managing high-speed stream: {response}")
             return None
-        return response.baud_rate, response.delay_us
+        return (
+            response.state_command,
+            response.baud_rate,
+            response.delay_us,
+        )
 
     def motor_command_stream(self, sub_function_code, data):
         """
@@ -174,6 +178,7 @@ class OrcaActuator:
             return None
         return (
             response.register_value,
+            response.mode,
             response.position,
             response.force,
             response.power,
@@ -194,6 +199,7 @@ class OrcaActuator:
             print(f"Error sending motor write stream: {response}")
             return None
         return (
+            response.mode,
             response.position,
             response.force,
             response.power,
