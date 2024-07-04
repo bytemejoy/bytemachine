@@ -21,7 +21,7 @@ def main():
         enable=True, baud_rate=625000, delay_us=50
     )
     if realized_results is not None:
-        realized_baud_rate, realized_delay_us = realized_results
+        _, realized_baud_rate, realized_delay_us = realized_results
         print(f"Realized baud rate: {realized_baud_rate} bps")
         print(f"Realized delay: {realized_delay_us} us")
 
