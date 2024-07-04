@@ -5,6 +5,10 @@ py_binary(
     srcs = ["main.py"],
     deps = [
         "@pypi//pymodbus",
-	"//src/orca:constants",
+        "//src/orca:actuator",
+        "//src/orca:manage_high_speed_stream",
+        "//src/orca:motor_command_stream",
+        "//src/orca:motor_read_stream",
+        "//src/orca:motor_write_stream",
     ],
 )
