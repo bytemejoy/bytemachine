@@ -1,19 +1,29 @@
-from pymodbus.client.serial import ModbusSerialClient as ModbusClient
+from typing import Union
+
+from pymodbus.client.serial import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusIOException
 from pymodbus.framer import Framer
+from pymodbus.pdu import ModbusResponse
 
 from src.orca.manage_high_speed_stream import (
     ManageHighSpeedStreamRequest,
     ManageHighSpeedStreamResponse,
+    ManageHighSpeedStreamResult,
 )
 from src.orca.motor_command_stream import (
     MotorCommandStreamRequest,
     MotorCommandStreamResponse,
+    MotorCommandStreamResult,
 )
-from src.orca.motor_read_stream import MotorReadStreamRequest, MotorReadStreamResponse
+from src.orca.motor_read_stream import (
+    MotorReadStreamRequest,
+    MotorReadStreamResponse,
+    MotorReadStreamResult,
+)
 from src.orca.motor_write_stream import (
     MotorWriteStreamRequest,
     MotorWriteStreamResponse,
+    MotorWriteStreamResult,
 )
 
 
@@ -30,14 +40,14 @@ class OrcaActuator:
             port (str): The serial port the actuator is connected to.
             timeout (int): The timeout for Modbus requests in seconds (default: 1).
         """
-        self.framer = Framer.RTU
-        self.port = port
-        self.slave_address = 1
-        self.baudrate = 19200
-        self.timeout = timeout
-        self.stop_bits = 1
-        self.parity = "E"
-        self.client = ModbusClient(
+        self.framer: Framer = Framer.RTU
+        self.port: str = port
+        self.slave_address: int = 1
+        self.baudrate: int = 19200
+        self.timeout: int = timeout
+        self.stop_bits: int = 1
+        self.parity: str = "E"
+        self.client: AsyncModbusSerialClient = AsyncModbusSerialClient(
             framer=self.framer,
             port=self.port,
             baudrate=self.baudrate,
@@ -58,10 +68,18 @@ class OrcaActuator:
         self.client.register(
             MotorWriteStreamResponse  # pyright: ignore[reportArgumentType]
         )
-        self.client.connect()
-        self.sleep()
 
-    def read_register(self, address: int, count: int = 1):
+    async def connect(self) -> bool:
+        """
+        Starts the Modbus connection to the actuator.
+
+        Returns:
+            bool: True if connection was successful else False.
+        """
+        connection_successful: bool = await self.client.connect()
+        return connection_successful
+
+    async def read_register(self, address: int, count: int = 1) -> Union[list, None]:
         """
         Reads one or more registers from the actuator.
 
@@ -73,7 +91,7 @@ class OrcaActuator:
             list: A list of register values, or None if the read failed.
         """
         try:
-            response = self.client.read_holding_registers(
+            response: ModbusResponse = await self.client.read_holding_registers(
                 address, count, slave=self.slave_address
             )
             if response.isError():
@@ -84,7 +102,7 @@ class OrcaActuator:
             print(f"Modbus IO Error: {e}")
             return None
 
-    def write_register(self, address: int, value: int):
+    async def write_register(self, address: int, value: int) -> bool:
         """
         Writes a value to a single register in the actuator.
 
@@ -96,7 +114,7 @@ class OrcaActuator:
             bool: True if the write was successful, False otherwise.
         """
         try:
-            response = self.client.write_register(
+            response: ModbusResponse = await self.client.write_register(
                 address, value, slave=self.slave_address
             )
             if response.isError():
@@ -107,7 +125,7 @@ class OrcaActuator:
             print(f"Modbus IO Error: {e}")
             return False
 
-    def write_registers(self, address: int, values: list):
+    async def write_registers(self, address: int, values: list) -> bool:
         """
         Writes multiple values to consecutive registers in the actuator.
 
@@ -119,7 +137,7 @@ class OrcaActuator:
             bool: True if the write was successful, False otherwise.
         """
         try:
-            response = self.client.write_registers(
+            response: ModbusResponse = await self.client.write_registers(
                 address, values, slave=self.slave_address
             )
             if response.isError():
@@ -130,128 +148,104 @@ class OrcaActuator:
             print(f"Modbus IO Error: {e}")
             return False
 
-    def manage_high_speed_stream(self, enable, baud_rate, delay_us):
+    async def manage_high_speed_stream(
+        self, enable: bool, baud_rate: int, delay_us: int
+    ) -> Union[ManageHighSpeedStreamResult, None]:
         """
         Manages the high-speed stream parameters of the actuator.
         """
         request = ManageHighSpeedStreamRequest(enable, baud_rate, delay_us)
-        response: ManageHighSpeedStreamResponse = self.client.execute(
+        response: ManageHighSpeedStreamResponse = await self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
         if response.isError():
             print(f"Error managing high-speed stream: {response}")
             return None
-        return (
-            response.state_command,
-            response.baud_rate,
-            response.delay_us,
-        )
+        return response.result
 
-    def motor_command_stream(self, sub_function_code, data):
+    async def motor_command_stream(
+        self, sub_function_code: int, data: int
+    ) -> Union[MotorCommandStreamResult, None]:
         """
         Sends a motor command stream message to the actuator.
         """
         request = MotorCommandStreamRequest(
             sub_function_code, data, slave=self.slave_address
         )
-        response: MotorCommandStreamResponse = self.client.execute(
+        response: MotorCommandStreamResponse = await self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
         if response.isError():
             print(f"Error sending motor command stream: {response}")
             return None
-        return (
-            response.position,
-            response.force,
-            response.power,
-            response.temperature,
-            response.voltage,
-            response.errors,
-        )
+        response.result
 
-    def motor_read_stream(self, register_address, register_width):
+    async def motor_read_stream(
+        self, register_address: int, register_width: int
+    ) -> Union[MotorReadStreamResult, None]:
         """
         Reads a register value from the actuator using the motor read stream function.
         """
         request = MotorReadStreamRequest(
             register_address, register_width, slave=self.slave_address
         )
-        response: MotorReadStreamResponse = self.client.execute(
+        response: MotorReadStreamResponse = await self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
         if response.isError():
             print(f"Error sending motor read stream: {response}")
             return None
-        return (
-            response.register_value,
-            response.mode,
-            response.position,
-            response.force,
-            response.power,
-            response.temperature,
-            response.voltage,
-            response.errors,
-        )
+        return response.result
 
-    def motor_write_stream(self, register_address, register_width, data):
+    async def motor_write_stream(
+        self, register_address: int, register_width: int, data: int
+    ) -> Union[MotorWriteStreamResult, None]:
         """
         Writes a value to a register in the actuator using the motor write stream function.
         """
         request = MotorWriteStreamRequest(
             register_address, register_width, data, slave=self.slave_address
         )
-        response: MotorWriteStreamResponse = self.client.execute(
+        response: MotorWriteStreamResponse = await self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
         if response.isError():
             print(f"Error sending motor write stream: {response}")
             return None
-        return (
-            response.mode,
-            response.position,
-            response.force,
-            response.power,
-            response.temperature,
-            response.voltage,
-            response.errors,
-        )
+        response.result
 
-    def auto_zero(self, max_force, exit_to_mode):
+    async def auto_zero(self, max_force: int, exit_to_mode: int) -> bool:
         """
         Auto zeros the actuator using up to max_force and exiting to mode exit_to_mode when complete.
         """
-        self.write_registers(171, [2, max_force, exit_to_mode])
-        self.write_register(3, 55)
-        print("Performing auto zero")
-        while True:
-            mode = self.read_register(317)
-            if mode is not None and mode[0] == 1:
-                break
-        print("Auto zero complete")
+        write_successful: bool = await self.write_registers(
+            171, [2, max_force, exit_to_mode]
+        )
+        return await self.write_register(3, 55) | write_successful
 
-    def sleep(self):
-        """Puts the actuator into sleep mode."""
-        self.write_register(3, 1)
+    async def set_mode(self, mode: int) -> bool:
+        """Set actuator mode."""
+        return await self.write_register(3, mode)
 
-    def configure_kinematic_motion(
+    async def configure_kinematic_motion(
         self,
-        motion_id,
-        position_target,
-        settling_time,
-        auto_start_delay,
-        next_id,
-        next_type,
-        auto_start_next,
-    ):
+        motion_id: int,
+        position_target: int,
+        settling_time: int,
+        auto_start_delay: int,
+        next_id: int,
+        motion_type: int,
+        auto_start_next: int,
+    ) -> bool:
         """
         Configures/sets a kinematic motion.
         """
-        position_target_low = position_target & 0xFF
-        position_target_high = position_target >> 8 & 0xFF
-        settling_time_low = settling_time & 0xFF
-        settling_time_high = settling_time >> 8 & 0xFF
-        next_type_auto = next_id << 3 + next_type << 1 + auto_start_next
-        self.write_registers(
+        position_target_low: int = position_target & 0xFF
+        position_target_high: int = position_target >> 8 & 0xFF
+        settling_time_low: int = settling_time & 0xFF
+        settling_time_high: int = settling_time >> 8 & 0xFF
+        next_type_auto: int = next_id << 3 + motion_type << 1 + auto_start_next
+        return await self.write_registers(
             780 + 6 * motion_id,
             [
                 position_target_low,
@@ -263,7 +257,7 @@ class OrcaActuator:
             ],
         )
 
-    def close(self):
+    def close(self) -> None:
         """
         Closes the Modbus connection.
         """

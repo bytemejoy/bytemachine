@@ -1,10 +1,77 @@
 import struct
+from dataclasses import dataclass
+from typing import Union
 
 from pymodbus.pdu import ModbusRequest, ModbusResponse
 
+FRAMER_BYTES: int = 4
+MOTOR_COMMAND_STREAM_FUNCTION_CODE: int = 100
+MOTOR_COMMAND_STREAM_RESPONSE_FORMAT: str = ">IIHBHH"
+MOTOR_COMMAND_STREAM_REQUEST_FORMAT: str = ">BI"
+MOTOR_COMMAND_STREAM_RESPONSE_NUM_EXPECTED_VALUES: int = 6
+
+
+@dataclass(kw_only=True)
+class MotorCommandStreamResult:
+    position_um: int
+    force_mN: int
+    power_W: int
+    temperature_C: int
+    voltage_mV: int
+    errors: int
+
+
+class MotorCommandStreamResponse(ModbusResponse):
+    function_code: int = MOTOR_COMMAND_STREAM_FUNCTION_CODE
+    _rtu_frame_size: int = (
+        struct.calcsize(MOTOR_COMMAND_STREAM_RESPONSE_FORMAT) + FRAMER_BYTES
+    )
+
+    def __init__(self, values: Union[list, None] = None, **kwargs):
+        """Initialize response."""
+        ModbusResponse.__init__(self, **kwargs)
+        self.format: str = ">IIHBHH"
+        self.values: list = values or []
+        self.result: Union[MotorCommandStreamResult, None] = None
+        self._maybe_init_from_values()
+
+    def _maybe_init_from_values(self) -> None:
+        """Initialize result from supplied values."""
+        if self.values:
+            self.result = MotorCommandStreamResult(
+                position_um=self.values[0],
+                force_mN=self.values[1],
+                power_W=self.values[2],
+                temperature_C=self.values[3],
+                voltage_mV=self.values[4],
+                errors=self.values[5],
+            )
+
+    def encode(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+    ) -> Union[bytes, None]:
+        """Encode response."""
+        if self.values:
+            return struct.pack(
+                self.format,
+                *self.values,
+            )
+
+    def decode(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, data: bytes
+    ) -> None:
+        """Decode response."""
+        self.values = list(
+            struct.unpack(
+                self.format,
+                data[0 : struct.calcsize(self.format)],
+            )
+        )
+        self._maybe_init_from_values()
+
 
 class MotorCommandStreamRequest(ModbusRequest):
-    function_code = 100
+    function_code: int = MOTOR_COMMAND_STREAM_FUNCTION_CODE
     # +----------+--------+--------------------------------------------------+
     # | Field    | Length | Values                                           |
     # +----------+--------+--------------------------------------------------+
@@ -30,81 +97,37 @@ class MotorCommandStreamRequest(ModbusRequest):
     # | CRC      | 2      | CRC-16 (Modbus) Polynomial 0xA001                |
     # |          | bytes  |                                                  |
     # +----------+--------+--------------------------------------------------+
-    _rtu_frame_size = 9  # Adjusted for 1 byte sub-function code + 4 byte data
+    _rtu_frame_size: int = (
+        struct.calcsize(MOTOR_COMMAND_STREAM_REQUEST_FORMAT) + FRAMER_BYTES
+    )
 
-    def __init__(self, sub_function_code, data, **kwargs):
+    def __init__(self, sub_function_code: int, data: int, **kwargs):
         super().__init__(**kwargs)
-        self.sub_function_code = sub_function_code
-        self.data = data if isinstance(data, list) else [data]
+        self.format: str = MOTOR_COMMAND_STREAM_REQUEST_FORMAT
+        self.sub_function_code: int = sub_function_code
+        self.data: int = data
 
-    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+    def encode(self) -> bytes:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Encode request."""
-        return struct.pack(">BI", self.sub_function_code, self.data[0])
-
-    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Decode request."""
-        self.sub_function_code, self.data[0] = struct.unpack(">BI", data)
-
-    def execute(self, context):
-        """Execute request."""
-        values = context.getValues(self.function_code, 6)
-        return MotorCommandStreamResponse(values)
-
-
-class MotorCommandStreamResponse(ModbusResponse):
-    function_code = 100
-    _rtu_frame_size = 19
-
-    def __init__(self, values=None, **kwargs):
-        """Initialize response."""
-        ModbusResponse.__init__(self, **kwargs)
-        self.format = ">IIHBHH"
-        self.values = values or []
-        self.position = None
-        self.force = None
-        self.power = None
-        self.temperature = None
-        self.voltage = None
-        self.errors = None
-        self._maybe_init_from_values()
-
-    def _maybe_init_from_values(self):
-        """Initialize member variables from supplied values."""
-        if self.values:
-            self.position = self.values[0]
-            self.force = self.values[1]
-            self.power = self.values[2]
-            self.temperature = self.values[3]
-            self.voltage = self.values[4]
-            self.errors = self.values[5]
-
-    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Encode response."""
         return struct.pack(
             self.format,
-            self.position,
-            self.force,
-            self.power,
-            self.temperature,
-            self.voltage,
-            self.errors,
+            self.sub_function_code,
+            self.data,
         )
 
-    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Decode response."""
-        (
-            self.position,
-            self.force,
-            self.power,
-            self.temperature,
-            self.voltage,
-            self.errors,
-        ) = struct.unpack(self.format, data[0 : struct.calcsize(self.format)])
-        self.values = [
-            self.position,
-            self.force,
-            self.power,
-            self.temperature,
-            self.voltage,
-            self.errors,
-        ]
+    def decode(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, data: bytes
+    ) -> None:
+        """Decode request."""
+        self.sub_function_code, self.data = struct.unpack(
+            self.format,
+            data,
+        )
+
+    def execute(self, context) -> MotorCommandStreamResponse:
+        """Execute request."""
+        values = context.getValues(
+            self.function_code,
+            MOTOR_COMMAND_STREAM_RESPONSE_NUM_EXPECTED_VALUES,
+        )
+        return MotorCommandStreamResponse(values)

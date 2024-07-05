@@ -1,10 +1,71 @@
 import struct
+from dataclasses import dataclass
+from typing import Union
 
 from pymodbus.pdu import ModbusRequest, ModbusResponse
 
+FRAMER_BYTES: int = 4
+MANAGE_HIGH_SPEED_STREAM_FUNCTION_CODE: int = 65
+MANAGE_HIGH_SPEED_STREAM_RESPONSE_FORMAT: str = ">BIH"
+MANAGE_HIGH_SPEED_STREAM_REQUEST_FORMAT: str = ">HIH"
+MANAGE_HIGH_SPEED_STREAM_RESPONSE_NUM_EXPECTED_VALUES: int = 3
+
+
+@dataclass(kw_only=True)
+class ManageHighSpeedStreamResult:
+    state_command: int
+    realized_baud_rate: int
+    realized_delay_us: int
+
+
+class ManageHighSpeedStreamResponse(ModbusResponse):
+    function_code: int = MANAGE_HIGH_SPEED_STREAM_FUNCTION_CODE
+    _rtu_frame_size: int = (
+        struct.calcsize(MANAGE_HIGH_SPEED_STREAM_RESPONSE_FORMAT) + FRAMER_BYTES
+    )
+
+    def __init__(self, values: Union[list, None] = None, **kwargs):
+        """Initialize response."""
+        ModbusResponse.__init__(self, **kwargs)
+        self.format: str = MANAGE_HIGH_SPEED_STREAM_RESPONSE_FORMAT
+        self.values: list = values or []
+        self.result: Union[ManageHighSpeedStreamResult, None] = None
+        self._maybe_init_from_values()
+
+    def _maybe_init_from_values(self) -> None:
+        """Initialize member variables from supplied values."""
+        if self.values:
+            self.result = ManageHighSpeedStreamResult(
+                state_command=self.values[0],
+                realized_baud_rate=self.values[1],
+                realized_delay_us=self.values[2],
+            )
+
+    def encode(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+    ) -> Union[bytes, None]:
+        """Encode response."""
+        if self.values:
+            return struct.pack(
+                self.format,
+                *self.values,
+            )
+
+    def decode(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, data: bytes
+    ) -> None:
+        """Decode response."""
+        self.values = list(
+            struct.unpack(
+                self.format,
+                data[0 : struct.calcsize(self.format)],
+            )
+        )
+        self._maybe_init_from_values()
+
 
 class ManageHighSpeedStreamRequest(ModbusRequest):
-    function_code = 65
+    function_code: int = MANAGE_HIGH_SPEED_STREAM_FUNCTION_CODE
     # +----------------+---------+--------------------------------+---------------------------+
     # | Device Address | 1 byte  | 0x01                           |                           |
     # +----------------+---------+--------------------------------+---------------------------+
@@ -19,68 +80,39 @@ class ManageHighSpeedStreamRequest(ModbusRequest):
     # +----------------+---------+--------------------------------+---------------------------+
     # | CRC            | 2 bytes | CRC-16 (MODBUS) Polynomial 0xA001                          |
     # +----------------+---------+--------------------------------+---------------------------+
-    _rtu_frame_size = 12
+    _rtu_frame_size: int = (
+        struct.calcsize(MANAGE_HIGH_SPEED_STREAM_REQUEST_FORMAT) + FRAMER_BYTES
+    )
 
-    def __init__(self, enable, baud_rate, delay_us, **kwargs):
+    def __init__(self, enable: bool, baud_rate: int, delay_us: int, **kwargs):
         super().__init__(**kwargs)
-        self.enable = enable
-        self.baud_rate = baud_rate
-        self.delay_us = delay_us
+        self.format: str = MANAGE_HIGH_SPEED_STREAM_REQUEST_FORMAT
+        self.enable: bool = enable
+        self.baud_rate: int = baud_rate
+        self.delay_us: int = delay_us
 
-    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+    def encode(self) -> bytes:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Encode request."""
-        sub_function_code = 0xFF00 if self.enable else 0x0000
-        return struct.pack(">HIH", sub_function_code, self.baud_rate, self.delay_us)
+        sub_function_code: int = 0xFF00 if self.enable else 0x0000
+        return struct.pack(
+            self.format,
+            sub_function_code,
+            self.baud_rate,
+            self.delay_us,
+        )
 
-    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
+    def decode(self, data: bytes):  # pyright: ignore[reportIncompatibleMethodOverride]
         """Decode request."""
         self.sub_function_code, self.baud_rate, self.delay_us = struct.unpack(
-            ">HIH", data
+            self.format,
+            data,
         )
         self.enable = self.sub_function_code == 0xFF00
 
     def execute(self, context):
         """Execute request."""
-        values = context.getValues(self.function_code, 3)
-        return ManageHighSpeedStreamResponse(values)
-
-
-class ManageHighSpeedStreamResponse(ModbusResponse):
-    function_code = 65
-    _rtu_frame_size = 11
-
-    def __init__(self, values=None, **kwargs):
-        """Initialize response."""
-        ModbusResponse.__init__(self, **kwargs)
-        self.format = ">BIH"
-        self.values = values or []
-        self.state_command = None
-        self.baud_rate = None
-        self.delay_us = None
-        self._maybe_init_from_values()
-
-    def _maybe_init_from_values(self):
-        """Initialize member variables from supplied values."""
-        if self.values:
-            self.state_command = self.values[0]
-            self.baud_rate = self.values[1]
-            self.delay_us = self.values[2]
-
-    def encode(self):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Encode response."""
-        return struct.pack(
-            self.format, self.state_command, self.baud_rate, self.delay_us
+        values: list = context.getValues(
+            self.function_code,
+            MANAGE_HIGH_SPEED_STREAM_RESPONSE_NUM_EXPECTED_VALUES,
         )
-
-    def decode(self, data):  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Decode response."""
-        (
-            self.state_command,
-            self.baud_rate,
-            self.delay_us,
-        ) = struct.unpack(self.format, data[0 : struct.calcsize(self.format)])
-        self.values = [
-            self.state_command,
-            self.baud_rate,
-            self.delay_us,
-        ]
+        return ManageHighSpeedStreamResponse(values)
