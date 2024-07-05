@@ -45,6 +45,7 @@ class OrcaActuator:
             stopbits=self.stop_bits,
             timeout=self.timeout,
         )
+        self.client.silent_interval = 0.002
         self.client.register(
             ManageHighSpeedStreamResponse  # pyright: ignore[reportArgumentType]
         )
@@ -58,6 +59,7 @@ class OrcaActuator:
             MotorWriteStreamResponse  # pyright: ignore[reportArgumentType]
         )
         self.client.connect()
+        self.sleep()
 
     def read_register(self, address: int, count: int = 1):
         """
@@ -72,7 +74,7 @@ class OrcaActuator:
         """
         try:
             response = self.client.read_holding_registers(
-                address, count, unit=self.slave_address
+                address, count, slave=self.slave_address
             )
             if response.isError():
                 print(f"Error reading register(s): {response}")
@@ -95,7 +97,7 @@ class OrcaActuator:
         """
         try:
             response = self.client.write_register(
-                address, value, unit=self.slave_address
+                address, value, slave=self.slave_address
             )
             if response.isError():
                 print(f"Error writing register: {response}")
@@ -118,7 +120,7 @@ class OrcaActuator:
         """
         try:
             response = self.client.write_registers(
-                address, values, unit=self.slave_address
+                address, values, slave=self.slave_address
             )
             if response.isError():
                 print(f"Error writing registers: {response}")
@@ -149,7 +151,9 @@ class OrcaActuator:
         """
         Sends a motor command stream message to the actuator.
         """
-        request = MotorCommandStreamRequest(sub_function_code, data)
+        request = MotorCommandStreamRequest(
+            sub_function_code, data, slave=self.slave_address
+        )
         response: MotorCommandStreamResponse = self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
@@ -169,7 +173,9 @@ class OrcaActuator:
         """
         Reads a register value from the actuator using the motor read stream function.
         """
-        request = MotorReadStreamRequest(register_address, register_width)
+        request = MotorReadStreamRequest(
+            register_address, register_width, slave=self.slave_address
+        )
         response: MotorReadStreamResponse = self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
@@ -191,7 +197,9 @@ class OrcaActuator:
         """
         Writes a value to a register in the actuator using the motor write stream function.
         """
-        request = MotorWriteStreamRequest(register_address, register_width, data)
+        request = MotorWriteStreamRequest(
+            register_address, register_width, data, slave=self.slave_address
+        )
         response: MotorWriteStreamResponse = self.client.execute(
             request
         )  # pyright: ignore[reportAssignmentType]
@@ -206,6 +214,53 @@ class OrcaActuator:
             response.temperature,
             response.voltage,
             response.errors,
+        )
+
+    def auto_zero(self, max_force, exit_to_mode):
+        """
+        Auto zeros the actuator using up to max_force and exiting to mode exit_to_mode when complete.
+        """
+        self.write_registers(171, [2, max_force, exit_to_mode])
+        self.write_register(3, 55)
+        print("Performing auto zero")
+        while True:
+            mode = self.read_register(317)
+            if mode is not None and mode[0] == 1:
+                break
+        print("Auto zero complete")
+
+    def sleep(self):
+        """Puts the actuator into sleep mode."""
+        self.write_register(3, 1)
+
+    def configure_kinematic_motion(
+        self,
+        motion_id,
+        position_target,
+        settling_time,
+        auto_start_delay,
+        next_id,
+        next_type,
+        auto_start_next,
+    ):
+        """
+        Configures/sets a kinematic motion.
+        """
+        position_target_low = position_target & 0xFF
+        position_target_high = position_target >> 8 & 0xFF
+        settling_time_low = settling_time & 0xFF
+        settling_time_high = settling_time >> 8 & 0xFF
+        next_type_auto = next_id << 3 + next_type << 1 + auto_start_next
+        self.write_registers(
+            780 + 6 * motion_id,
+            [
+                position_target_low,
+                position_target_high,
+                settling_time_low,
+                settling_time_high,
+                auto_start_delay,
+                next_type_auto,
+            ],
         )
 
     def close(self):

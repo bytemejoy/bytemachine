@@ -42,7 +42,7 @@ class MotorReadStreamRequest(ModbusRequest):
 
 class MotorReadStreamResponse(ModbusResponse):
     function_code = 104
-    _rtu_byte_count_pos = 2
+    _rtu_frame_size = 24
 
     def __init__(self, values=None, **kwargs):
         """Initialize response."""

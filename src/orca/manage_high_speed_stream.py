@@ -47,7 +47,7 @@ class ManageHighSpeedStreamRequest(ModbusRequest):
 
 class ManageHighSpeedStreamResponse(ModbusResponse):
     function_code = 65
-    _rtu_byte_count_pos = 2
+    _rtu_frame_size = 11
 
     def __init__(self, values=None, **kwargs):
         """Initialize response."""
