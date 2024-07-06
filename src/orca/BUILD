@@ -13,6 +13,18 @@ py_library(
 )
 
 py_library(
+    name = "bit_utils",
+    srcs = ["bit_utils.py.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "constants",
+    srcs = ["constants.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
     name = "manage_high_speed_stream",
     srcs = ["manage_high_speed_stream.py"],
     visibility = ["//visibility:public"],
