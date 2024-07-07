@@ -8,7 +8,7 @@ py_binary(
         "@pypi//pynput",
         "//src/bytemachine:lib_bytemachine",
         "//src/orca:actuator",
-        "//src/orca:constants"
+        "//src/orca:constants",
         "//src/orca:manage_high_speed_stream",
         "//src/orca:motor_command_stream",
         "//src/orca:motor_read_stream",
