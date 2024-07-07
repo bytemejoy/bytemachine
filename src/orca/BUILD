@@ -4,6 +4,10 @@ py_library(
     name = "actuator",
     srcs = ["actuator.py"],
     deps = [
+        "@pypi//pymodbus",
+        "@pypi//numpy",
+        ":bit_utils",
+        ":constants",
         ":manage_high_speed_stream",
         ":motor_command_stream",
         ":motor_read_stream",
@@ -14,7 +18,10 @@ py_library(
 
 py_library(
     name = "bit_utils",
-    srcs = ["bit_utils.py.py"],
+    srcs = ["bit_utils.py"],
+    deps = [
+        "@pypi//numpy",
+    ],
     visibility = ["//visibility:public"],
 )
 

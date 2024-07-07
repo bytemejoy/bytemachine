@@ -181,8 +181,30 @@ class OrcaConstants:
     HW_VERSION = 414
     COMMS_TIMEOUT = 417
     STATOR_CONFIG = 418
+    ########################
+    # Motor Command Stream #
+    ########################
+    MOTOR_COMMAND_STREAM_FORCE = 28
+    MOTOR_COMMAND_STREAM_POSITION = 30
+    MOTOR_COMMAND_STREAM_KINEMATIC = 32
+    MOTOR_COMMAND_STREAM_HAPTIC = 34
+    ############
+    # Commands #
+    ############
+    MOTOR_COMMAND_FORCE = 28
+    MOTOR_COMMAND_FORCE_H = 29
+    MOTOR_COMMAND_POS = 30
+    MOTOR_COMMAND_POS_H = 31
     ##########
     # Errors #
     ##########
     ERROR_0 = 432
     ERROR_1 = 433
+    ERROR_CONFIGURATION = 1
+    ERROR_FORCE_CLIPPING = 32
+    ERROR_TEMPERATURE_EXCEEDED = 64
+    ERROR_FORCE_EXCEEDED = 128
+    ERROR_POWER_EXCEEDED = 256
+    ERROR_SHAFT_IMAGE_FAILED = 512
+    ERROR_VOLTAGE_INVALID = 1024
+    ERROR_COMMS_TIMEOUT = 2048
