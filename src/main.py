@@ -120,16 +120,17 @@ async def main():
     def on_release(key):
         """Handles key releases."""
         if key == keyboard.Key.esc:
-            # Stop listener and exit the script
             return
 
-    # Print current state and
+    # Print current state and usage instructions.
     print_usage()
 
     # Collect events until esc is pressed.
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
 
+    # Put actuator to sleep and disconnect.
+    await actuator.set_mode(ORCA_CONSTANTS.MODE_SLEEP)
     actuator.close()
 
 
