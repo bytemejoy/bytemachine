@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from src.orca.constants import OrcaConstants
 from src.orca.actuator import OrcaActuator
 
@@ -11,9 +9,7 @@ async def configure_two_point_kinematic_motion(
     stroke_rate_mm_s: float,
     stroke_length_mm: float,
     stroke_start_offset_mm: float = 0,
-    motion_id_1: int = 0,
-    motion_id_2: int = 1,
-) -> Tuple[bool, bool]:
+) -> None:
     """
     Configures a two-point kinematic motion on the actuator to achieve the
     specified stroke rate and stroke length.
@@ -21,6 +17,9 @@ async def configure_two_point_kinematic_motion(
     This method sets up two kinematic motions:
     - Motion 1: Moves the actuator forward by stroke_length_mm.
     - Motion 2: Moves the actuator backward to the starting position.
+
+    To handle smooth changes to motion profiles four kinematic registers are
+    used (0, 1, 2, 3) where we swap between using [0, 1] and [2, 3].
 
     The settling time for each motion is calculated to achieve the desired
     stroke rate.
@@ -42,35 +41,57 @@ async def configure_two_point_kinematic_motion(
         kinematic motion was successful.
     """
     # Calculate settling time in milliseconds for the given stroke rate.
-    settling_time_ms: int = int((stroke_length_mm / stroke_rate_mm_s) * 1000)
+    settling_time_ms: int = max(int((stroke_length_mm / stroke_rate_mm_s) * 1000), 0)
     # Calculate the start position target in micrometers.
-    position_target_start_um: int = int(stroke_start_offset_mm * 1000)
+    position_target_start_um: int = max(int(stroke_start_offset_mm * 1000), 0)
     # Calculate end position target in micrometers.
-    position_target_end_um: int = int(
-        stroke_length_mm * 1000 + stroke_start_offset_mm * 1000
+    position_target_end_um: int = max(
+        int(stroke_length_mm * 1000 + stroke_start_offset_mm * 1000), 0
     )
-
-    set_motion_1_successful: bool = await actuator.set_kinematic_motion(
-        motion_id=motion_id_1,
-        position_target_um=position_target_end_um,
-        settling_time_ms=settling_time_ms,
-        auto_start_delay_ms=0,
-        next_id=motion_id_2,
-        motion_type=1,  # Linear motion
-        auto_start_next=1,
-    )
-
-    set_motion_2_successful: bool = await actuator.set_kinematic_motion(
-        motion_id=motion_id_2,
-        position_target_um=position_target_start_um,
-        settling_time_ms=settling_time_ms,
-        auto_start_delay_ms=0,
-        next_id=motion_id_1,
-        motion_type=1,  # Linear motion
-        auto_start_next=1,
-    )
-
-    return set_motion_1_successful, set_motion_2_successful
+    # Configure registers and trigger configured motion.
+    while True:
+        kin_status = await actuator.motor_read_stream(
+            ORCA_CONSTANTS.KINEMATIC_STATUS, register_width=1
+        )
+        if kin_status:
+            active_motion_id = kin_status.register_value & 0x7FFF
+            motion_out_id = 0
+            motion_in_id = 1
+            if active_motion_id == 0 or active_motion_id == 1:
+                motion_out_id = 2
+                motion_in_id = 3
+            motion_to_trigger_id = motion_out_id
+            if active_motion_id == 1 or active_motion_id == 3:
+                motion_to_trigger_id = motion_in_id
+            set_motion_out_successful = await actuator.set_kinematic_motion(
+                motion_id=motion_out_id,
+                position_target_um=position_target_end_um,
+                settling_time_ms=settling_time_ms,
+                auto_start_delay_ms=0,
+                next_id=motion_in_id,
+                motion_type=1,  # Min jerk.
+                auto_start_next=1,
+            )
+            print(f"Set motion out to motion_id {motion_out_id}")
+            set_motion_in_successful = await actuator.set_kinematic_motion(
+                motion_id=motion_in_id,
+                position_target_um=position_target_start_um,
+                settling_time_ms=settling_time_ms,
+                auto_start_delay_ms=0,
+                next_id=motion_out_id,
+                motion_type=1,  # Min jerk.
+                auto_start_next=1,
+            )
+            print(f"Set motion in to motion_id {motion_out_id}")
+            print(
+                f"Sets successful = {set_motion_out_successful and set_motion_in_successful}"
+            )
+            print(
+                f"Active motion id {active_motion_id} triggering just set motion id {motion_to_trigger_id}"
+            )
+            await actuator.trigger_kinematic_motion(motion_to_trigger_id)
+            break
+    return
 
 
 async def auto_zero_wait(
